@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  ganache:
+    image: trufflesuite/ganache
+    container_name: ganache
+    restart: always
+    ports:
+      - "8545:8545"
+    command: ["--db", "/ganache-data", "--mnemonic", "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat"]
+    volumes:
+      - ganache_data:/ganache-data
+    networks:
+      - app_network
+
+  thingsboard:
+    image: thingsboard/tb-postgres
+    container_name: thingsboard
+    restart: always
+    ports:
+      - "9090:9090"
+      - "1883:1883" # MQTT
+      - "5683:5683/udp" # CoAP
+    environment:
+      - DATABASE_TS_TYPE=sql
+      - HTTP_CORS_ALLOW_ORIGIN=*  # Enable CORS for ThingsBoard
+    volumes:
+      - tb-data:/data
+      - tb-logs:/var/log/thingsboard
+    networks:
+      - app_network
+
+  react-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: react-app
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - ganache
+      - thingsboard
+    env_file:
+      - .env
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  ganache_data:
+  tb-data:
+  tb-logs:

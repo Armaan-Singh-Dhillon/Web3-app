@@ -49,7 +49,7 @@ function App() {
   async function fetchEnergyData() {
     try {
       const response = await fetch(
-        `/thingsboard/api/plugins/telemetry/DEVICE/${DEVICE_ID}/values/timeseries?keys=power`,
+        `http://localhost:9090/api/plugins/telemetry/DEVICE/0eb8ae80-ffe6-11ef-b36a-71656502eb9c/values/timeseries?keys=power`,
         {
           headers: { "X-Authorization": `Bearer ${thingsboardToken}` },
         }
