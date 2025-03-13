@@ -11,7 +11,7 @@ const account = import.meta.env.VITE_ACCOUNT;
 const thingsboardToken = import.meta.env.VITE_THINGSBOARD_TOKEN;
 const DEVICE_ID = import.meta.env.VITE_DEVICE_ID; // ThingsBoard device ID
 
-// ✅ Contract ABI (Update with your actual ABI)
+// ✅ Contract ABI
 const contractABI = [
   {
     "inputs": [{ "internalType": "uint256", "name": "_totalEnergy", "type": "uint256" }],
@@ -42,7 +42,8 @@ const contract = new web3.eth.Contract(contractABI, contractAddress);
 function App() {
   const [energy, setEnergy] = useState(null);
   const [bill, setBill] = useState(null);
-  const [loading, setLoading] = useState(false); // For button loading states
+  const [loading, setLoading] = useState(false);
+  const [transactions, setTransactions] = useState([]); // ✅ Store last 5 transactions
 
   // ✅ Fetch Energy Data from ThingsBoard
   async function fetchEnergyData() {
@@ -55,13 +56,21 @@ function App() {
       );
 
       const data = await response.json();
-      const power = data.power[0].value; // Extract power value
-      const energyValue = Math.floor(power); // Convert power to energy (rounded)
+      const power = data.power[0].value;
+      const energyValue = Math.floor(power);
       console.log(`⚡ Fetched Energy: ${energyValue} kWh`);
       setEnergy(energyValue);
     } catch (error) {
       console.error("❌ Error fetching energy data:", error.message);
     }
+  }
+
+  // ✅ Utility Function: Add Transaction to History (Limit to 5)
+  function addTransaction(type, amount, hash) {
+    setTransactions((prev) => {
+      const newTransactions = [{ type, amount, hash }, ...prev]; // Add to the top
+      return newTransactions.slice(0, 5); // Keep only the last 5 transactions
+    });
   }
 
   // ✅ Send Energy Data to Contract
@@ -90,6 +99,9 @@ function App() {
 
       const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
       console.log(`✅ Energy data stored! TX Hash: ${receipt.transactionHash}`);
+
+      // ✅ Add Transaction to History
+      addTransaction("Energy Stored", energy.toString(), receipt.transactionHash);
     } catch (error) {
       console.error("❌ Error sending energy data:", error.message);
     }
@@ -102,7 +114,7 @@ function App() {
     setLoading(true);
     try {
       const billAmount = await contract.methods.getBill().call({ from: account });
-      console.log(`💰 Bill Amount: ${billAmount} wei`);
+      console.log(`💰 Bill Amount: ${billAmount.toString()} wei`);
       setBill(billAmount);
     } catch (error) {
       console.error("❌ Error fetching bill:", error.message);
@@ -115,13 +127,14 @@ function App() {
     setLoading(true);
     try {
       const billAmount = await contract.methods.getBill().call({ from: account });
-      console.log(`💰 Bill to pay: ${billAmount} wei`);
 
       if (billAmount == 0) {
         console.log("✅ No bill pending!");
         setLoading(false);
         return;
       }
+
+      console.log(`💰 Bill to pay: ${billAmount.toString()} wei`);
 
       const tx = contract.methods.payBill();
       const gas = await tx.estimateGas({ from: account, value: billAmount });
@@ -136,13 +149,16 @@ function App() {
           gas,
           gasPrice,
           nonce,
-          value: billAmount,
+          value: billAmount.toString(),
         },
         privateKey
       );
 
       const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
       console.log(`✅ Bill paid successfully! TX Hash: ${receipt.transactionHash}`);
+
+      // ✅ Add Transaction to History
+      addTransaction("Bill Payment", billAmount.toString(), receipt.transactionHash);
     } catch (error) {
       console.error("❌ Error paying bill:", error.message);
     }
@@ -154,26 +170,46 @@ function App() {
   }, []);
 
   return (
-    <div className="container">
-      <h1>⚡ Energy Billing System</h1>
-      <div className="info">
-        <p>⚡ Energy: {energy !== null ? `${energy} kWh` : "Fetching..."}</p>
-        <p>💰 Bill: {bill !== null ? `${bill} wei` : "Not Fetched"}</p>
-      </div>
+  <div className="container">
+    <h1>
+      ⚡ Energy Billing System
+    </h1>
 
-      <div className="buttons">
-        <button onClick={sendEnergyData} disabled={loading}>
-          {loading ? "Processing..." : "Store Energy"}
-        </button>
-        <button onClick={fetchBill} disabled={loading}>
-          {loading ? "Fetching..." : "Fetch Bill"}
-        </button>
-        <button onClick={payBill} disabled={loading}>
-          {loading ? "Processing..." : "Pay Bill"}
-        </button>
-      </div>
+    <div className="info">
+      <p>⚡ Energy: {energy !== null ? `${energy} kWh` : "Fetching..."}</p>
+      <p>💰 Bill: {bill !== null ? `${bill} wei` : "Not Fetched"}</p>
     </div>
-  );
+
+    <div className="buttons">
+      <button onClick={sendEnergyData} disabled={loading}>
+        {loading ? "Processing..." : "Store Energy"}
+      </button>
+      <button onClick={fetchBill} disabled={loading}>
+        {loading ? "Fetching..." : "Fetch Bill"}
+      </button>
+      <button onClick={payBill} disabled={loading}>
+        {loading ? "Processing..." : "Pay Bill"}
+      </button>
+    </div>
+
+    <div className="transaction-history">
+      <h2>📜 Transaction History (Last 5)</h2>
+      <ul>
+        {transactions.length > 0 ? (
+          transactions.map((tx, index) => (
+            <li key={index}>
+              <strong>{tx.type}:</strong> {tx.amount} wei <br />
+              <strong>Tx Hash:</strong> {tx.hash}
+            </li>
+          ))
+        ) : (
+          <p>No recent transactions.</p>
+        )}
+      </ul>
+    </div>
+  </div>
+);
+
 }
 
 export default App;
